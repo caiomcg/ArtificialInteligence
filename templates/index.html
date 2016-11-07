@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>My Webpage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='bootstrap.min.css') }}">
+    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <div id="map">
+            <svg onclick="userPosition(evt)" width="1200px" height="720px">
+                <g id="layer-edges">
+                    {% for edge in edges %}
+                    <line id="{{edge.id}}" x1="{{edge.source.x}}" y1="{{edge.source.y}}" x2="{{edge.target.x}}" y2="{{edge.target.y}}" stroke="{{graph_settings.edge_stroke_color}}"
+                        stroke-width="{{graph_settings.edge_stroke_width}}" fill="none" /> 
+                    {% endfor %}
+                </g>
+                <g id="layer-distances">
+                    {% for edge in edges %}
+                        {% set angle = calculate_line_angle(edge.source.x, edge.source.y, edge.target.x, edge.target.y) %}
+                        {% if (angle >= 0 and angle <= 30) or (angle > 150 and angle <= 180) or (angle > 180 and angle <= 210) or (angle > 330 and angle <= 360) %} 
+                            <text x="{{(edge.source.x + edge.target.x)/2}}" y="{{((edge.source.y + edge.target.y)/2) - 10}}" font-weight="700" font-family="Open Sans" font-size="16px">{{edge.distance}}</text>
+                        {% elif (angle > 60 and angle <= 120) or (angle > 240 and angle <= 300) %}
+                            <text x="{{((edge.source.x + edge.target.x)/2) + 10}}" y="{{((edge.source.y + edge.target.y)/2)}}" font-weight="700" font-family="Open Sans" font-size="16px">{{edge.distance}}</text>
+                        {% elif (angle > 30 and angle <= 60) or (angle > 120 and angle <= 150) or (angle > 210 and angle <= 240) or (angle > 300 and angle <= 330) %}
+                            <text x="{{((edge.source.x + edge.target.x)/2) + 10}}" y="{{((edge.source.y + edge.target.y)/2)-10}}" font-weight="700" font-family="Open Sans" font-size="16px">{{edge.distance}}</text>
+                        {% endif %}
+                    {% endfor %}
+                </g>
+                <g id="layer-nodes">
+                    {% for node in nodes %}
+                    <g>
+                        <circle onmouseout="onMouseOutNode('node-{{node.id}}')" onmouseover="onMouseHoverNode('node-{{node.id}}')" id="node-{{node.id}}"
+                            cx="{{node.x}}" cy="{{node.y}}" stroke="{{graph_settings.node_stroke_color}}" stroke-width="{{graph_settings.node_stroke_width}}"
+                            fill="{{graph_settings.node_background_color}}" r="{{graph_settings.node_radius}}">
+                        </circle>
+                        <text fill="{{graph_settings.node_text_color}}" font-family="Open Sans" font-weight="700" font-size="20px" {% if node.id < 10 %} x="{{node.x - 6}}" y="{{node.y + 5.5}}"
+                            {% else %} x="{{node.x - 11}}" y="{{node.y + 5.5}}" {% endif %}>
+                            {{node.id}}
+                        </text>
+                    </g>
+                    {% endfor %}
+                </g>
+                <g id="user">
+                    <circle onclick="removeUser()" style="display:none;" id="node-user" cx="0" cy="0" stroke="{{graph_settings.user_node_stroke_color}}"
+                        stroke-width="{{graph_settings.user_node_stroke_width}}" fill="{{graph_settings.user_node_background_color}}"
+                        r="{{graph_settings.user_node_radius}}">
+                    </circle>
+                </g>
+                <script>
+                    function onMouseHoverNode(id) {
+                        document.getElementById(id).setAttribute("stroke", "#82B1FF");
+                    }
+
+                    function onMouseOutNode(id) {
+                        document.getElementById(id).setAttribute("stroke", "#0D47A1");
+                    }
+
+                    function showRoutes() {
+                        var routes = {{routes}}
+                        
+                        for(var i = 0; i < routes.length; i++) {
+                            var route = routes[i];
+                            for(var j = 0; j < routes[i].edges.length; j++) {
+                                var edge = routes[i].edges[j];
+                                if(document.getElementById('checkbox-rotas').checked) {
+                                    document.getElementById(edge.id).setAttribute("stroke", route.color);
+                                } else {
+                                    document.getElementById(edge.id).setAttribute("stroke", "{{graph_settings.edge_stroke_color}}");
+                                }
+                            }
+                        }
+
+                    }
+
+                    function angle(x1, y1, x2, y2) {
+                        var dy = y2 - y1;
+                        var dx = x2 - x1;
+                        var theta = Math.atan2(dy, dx); // range (-PI, PI]
+                        theta *= 180 / Math.PI; // rads to degs, range (-180, 180]
+                        //if (theta < 0) theta = 360 + theta; // range [0, 360)
+                        return theta;
+                    }
+
+                    function showDangerNodes() {
+                        var nodes = {{nodes}}
+
+                        for(var i = 0; i < nodes.length; i++) {
+                            if(nodes[i].danger == 1) {
+                                if(document.getElementById('checkbox-criminalidade').checked) {
+                                    document.getElementById('node-'+nodes[i].id).setAttribute("fill", "{{graph_settings.node_danger_background_color}}");
+                                } else {
+                                    document.getElementById('node-'+nodes[i].id).setAttribute("fill", "{{graph_settings.node_background_color}}");
+                                }
+                            }
+                        }
+                    }
+
+                    function userPosition(evt) {
+                        var e = evt.target;
+                        var dim = e.getBoundingClientRect();
+                        var x = evt.clientX - dim.left;
+                        var y = evt.clientY - dim.top;
+                        
+                        document.getElementById('node-user').setAttribute("cx", x);
+                        document.getElementById('node-user').setAttribute("cy", y);
+                        document.getElementById('node-user').setAttribute("style", "display:visible;");
+                        document.getElementById('user-info').innerHTML = 'X: '+ x +' | Y: ' + y;
+                    }
+
+                    function removeUser() {
+                        document.getElementById('node-user').setAttribute("cx", 0);
+                        document.getElementById('node-user').setAttribute("cy", 0);
+                        document.getElementById('node-user').setAttribute("style", "display:none;");
+                    }
+
+                </script>
+            </svg>
+        </div>
+        <div id="map-controls" class="row">
+            <div class="col-md-2">
+                <div class="row">
+                    <div class="col-md-12 text-center">
+                        Criminalidade
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <label class="switch">
+                        <input id="checkbox-criminalidade" onclick="showDangerNodes()" type="checkbox">
+                        <div class="slider"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="row">
+                    <div class="col-md-12 text-center">
+                        Rotas
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <label class="switch">
+                        <input id="checkbox-rotas" onclick="showRoutes()" type="checkbox">
+                        <div class="slider"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 pull-right" style="height:60px;">
+                <div class="row">
+                    <div class="col-md-6" id="user-info">
+                    </div>
+                    <div class="col-md-6" id="user-btn">
+                        <form action="/" method="post">
+                            <button class="btn btn-default btn-ok" type="submit">OK</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
